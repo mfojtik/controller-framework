@@ -19,6 +19,10 @@ The **controller-framework** is a versatile Golang module designed to facilitate
 
 - **Familiar Kubernetes Controller Paradigm**: Controllers created using this framework mirror the established structure and design principles of traditional Kubernetes controllers. Developers familiar with Kubernetes controller development will find it intuitive to work with this framework.
 
+The original location for this framework is OpenShift [library-go](https://github.com/openshift/library-go/tree/master/pkg/controller/factory) repository and this framework is used as controller framework
+for all OpenShift control plane operators. It has been proven stable, reliable and with minimum issues for multiple OpenShift releases.
+
+
 ## Installation
 
 Start to integrate the controller framework into your Golang project by using `factory` Go modules:
