@@ -64,11 +64,11 @@ package simple
 import (
 	"context"
 	"errors"
-	"github.com/mfojtik/controller-framework/pkg/events"
-	"github.com/mfojtik/controller-framework/pkg/factory"
 	"os"
 	"time"
 
+	"github.com/mfojtik/controller-framework/pkg/events"
+	"github.com/mfojtik/controller-framework/pkg/factory"
 	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
