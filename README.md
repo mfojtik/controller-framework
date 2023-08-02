@@ -29,23 +29,42 @@ import "github.com/mfojtik/controller-framework/pkg/factory"
 
 ## Getting Started
 
-Utilizing the controller framework is straightforward. Here's a basic example showcasing how to create a controller:
+Utilizing the controller framework is straightforward. Here's a simple example showcasing how to create a controller:
 
 ```go
-package main
+package simple
 
 import (
-	"fmt"
+	"context"
+	"errors"
+	"github.com/mfojtik/controller-framework/pkg/events"
+	"github.com/mfojtik/controller-framework/pkg/factory"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/mfojtik/controller-framework"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
+type controller struct {}
+
+func New(recorder events.Recorder) framework.Controller {
+	c := &controller{}
+	return factory.New().
+		WithSync(c.sync).                // reconcile function
+		// WithInformers(secretInformer) // react to secretInformer changes
+		ResyncEvery(10*time.Second).     // controller will queue sync() every 10s regardless of informers
+		ToController("simple", recorder)
+}
+
+func (c *controller) sync(ctx context.Context, controllerContext framework.Context) error {
+	// do stuff
+	_, err := os.ReadFile("/etc/cert.pem")
+	if errors.Is(err, os.ErrNotExist) {
+		// controller will requeue and retry
+		return errors.New("file not found")
+	}
+	return nil
+}
 ```
 
 ## Contribution
