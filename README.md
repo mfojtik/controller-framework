@@ -59,6 +59,7 @@ recorder := events.NewRecorder(client.CoreV1().Events("test-namespace"), "test-o
 Utilizing the controller framework is straightforward. Here's a simple example showcasing how to create a controller:
 
 ```go
+// simple_controller.go:
 package simple
 
 import (
@@ -72,8 +73,7 @@ import (
 	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
-type controller struct {
-}
+type controller struct {}
 
 func New(recorder events.Recorder) framework.Controller {
 	c := &controller{}
@@ -92,6 +92,22 @@ func (c *controller) sync(ctx context.Context, controllerContext framework.Conte
 		return errors.New("file not found")
 	}
 	return nil
+}
+
+// main.go:
+
+func main() {
+	// the controllerRef is an Kubernetes ownerReference to an object the events will tied to (a pod, namespace, etc)
+	recorder := events.NewRecorder(client.CoreV1().Events("test-namespace"), "test-operator", controllerRef)
+	
+	controller := simple.New(recorder)
+	
+	// when this context is done, the controllers will gracefully shutddown
+	ctx := context.Background()
+	
+	// start the controller with one worker
+	go controller.Run(ctx, 1)
+	...
 }
 ```
 
