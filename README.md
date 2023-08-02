@@ -38,7 +38,7 @@ func New() framework.controller {
 You can access the workqueue inside the `sync()` function via the [controller context](https://pkg.go.dev/github.com/mfojtik/controller-framework@master/pkg/context).
 
 ```go
-func (c *controller) sync(ctx context.Context, syncCtx factory.SyncContext) error {
+func (c *controller) sync(ctx context.Context, syncCtx framework.Context) error {
 	syncCtx.Recorder().Eventf(...)
 	syncCtx.Queue().Add("key")
 }
