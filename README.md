@@ -45,14 +45,15 @@ import (
 	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
-type controller struct {}
+type controller struct {
+}
 
 func New(recorder events.Recorder) framework.Controller {
 	c := &controller{}
 	return factory.New().
 		WithSync(c.sync).                // reconcile function
 		// WithInformers(secretInformer) // react to secretInformer changes
-		ResyncEvery(10*time.Second).     // controller will queue sync() every 10s regardless of informers
+		ResyncEvery(10*time.Second).     // queue sync() every 10s regardless of informers
 		ToController("simple", recorder)
 }
 
