@@ -1,4 +1,4 @@
-# Simple and Flexible Kubernetes Controller Development Kit
+# Simple Kubernetes Controller Development Kit
 
 [![CodeQL](https://github.com/mfojtik/controller-framework/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/mfojtik/controller-framework/actions/workflows/github-code-scanning/codeql)
 [![Dependency Review](https://github.com/mfojtik/controller-framework/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/mfojtik/controller-framework/actions/workflows/dependency-review.yml)
