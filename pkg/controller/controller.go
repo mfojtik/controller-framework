@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
 // SyntheticRequeueError can be returned from sync() in case of forcing a sync() retry artificially.
@@ -29,14 +29,14 @@ var SyntheticRequeueError = errors.New("synthetic requeue request")
 // baseController represents generic Kubernetes controller boiler-plate
 type baseController struct {
 	name        string
-	sync        func(ctx context.Context, controllerContext types.Context) error
-	syncContext types.Context
+	sync        func(ctx context.Context, controllerContext framework.Context) error
+	syncContext framework.Context
 
 	//syncDegradedClient operatorv1helpers.OperatorClient
 	resyncEvery     time.Duration
 	resyncSchedules []cron.Schedule
 
-	postStartHooks []types.PostStartHook
+	postStartHooks []framework.PostStartHook
 
 	informerSynced        []cache.InformerSynced
 	informerSyncedTimeout time.Duration
@@ -44,17 +44,17 @@ type baseController struct {
 
 func New(
 	name string,
-	sync func(ctx context.Context, controllerContext types.Context) error,
-	syncContext types.Context,
+	sync func(ctx context.Context, controllerContext framework.Context) error,
+	syncContext framework.Context,
 	resyncEvery time.Duration,
 	resyncSchedules []cron.Schedule,
-	postStartHooks []types.PostStartHook,
+	postStartHooks []framework.PostStartHook,
 	cachesToSync []cache.InformerSynced,
-	cacheSyncTimeout time.Duration) types.Controller {
+	cacheSyncTimeout time.Duration) framework.Controller {
 	return &baseController{name: name, informerSynced: cachesToSync, sync: sync, syncContext: syncContext, resyncEvery: resyncEvery, resyncSchedules: resyncSchedules, postStartHooks: postStartHooks, informerSyncedTimeout: cacheSyncTimeout}
 }
 
-var _ types.Controller = &baseController{}
+var _ framework.Controller = &baseController{}
 
 func (c *baseController) Name() string {
 	return c.name
@@ -74,17 +74,20 @@ func newScheduledJob(name string, queue workqueue.RateLimitingInterface) cron.Jo
 
 func (s *scheduledJob) Run() {
 	klog.V(4).Infof("Triggering scheduled %q controller run", s.name)
-	s.queue.Add(types.DefaultQueueKey)
+	s.queue.Add(framework.DefaultQueueKey)
 }
 
 func waitForNamedCacheSync(controllerName string, stopCh <-chan struct{}, cacheSyncs ...cache.InformerSynced) error {
-	klog.Infof("Waiting for caches to sync for %s", controllerName)
+	if len(cacheSyncs) == 0 {
+		return nil
+	}
+	klog.Infof("Waiting for informer caches to sync for %s controller ...", controllerName)
 
 	if !cache.WaitForCacheSync(stopCh, cacheSyncs...) {
 		return fmt.Errorf("unable to sync caches for %s", controllerName)
 	}
 
-	klog.Infof("Caches are synced for %s ", controllerName)
+	klog.Infof("Informer caches for %s controller are synced", controllerName)
 
 	return nil
 }
@@ -121,7 +124,7 @@ func (c *baseController) Run(ctx context.Context, workers int) {
 	queueContext, queueContextCancel := context.WithCancel(context.TODO())
 
 	for i := 1; i <= workers; i++ {
-		klog.Infof("Starting #%d worker of %s controller ...", i, c.name)
+		klog.Infof("Starting worker #%d for controller %s  ...", i, c.name)
 		workerWg.Add(1)
 		go func() {
 			defer func() {
@@ -152,7 +155,7 @@ func (c *baseController) Run(ctx context.Context, workers int) {
 		}
 		go func() {
 			defer workerWg.Done()
-			wait.UntilWithContext(ctx, func(ctx context.Context) { c.syncContext.Queue().Add(types.DefaultQueueKey) }, c.resyncEvery)
+			wait.UntilWithContext(ctx, func(ctx context.Context) { c.syncContext.Queue().Add(framework.DefaultQueueKey) }, c.resyncEvery)
 		}()
 	}
 
@@ -186,7 +189,7 @@ func (c *baseController) Run(ctx context.Context, workers int) {
 	klog.Infof("Shutting down %s ...", c.name)
 }
 
-func (c *baseController) Sync(ctx context.Context, syncCtx types.Context) error {
+func (c *baseController) Sync(ctx context.Context, syncCtx framework.Context) error {
 	return c.sync(ctx, syncCtx)
 }
 
@@ -215,7 +218,7 @@ func (c *baseController) reportDegraded(ctx context.Context, err error) error {
 }
 
 // reconcile wraps the sync() call and if operator client is set, it handle the degraded condition if sync() returns an error.
-func (c *baseController) reconcile(ctx context.Context, syncCtx types.Context) error {
+func (c *baseController) reconcile(ctx context.Context, syncCtx framework.Context) error {
 	err := c.sync(ctx, syncCtx)
 	degradedErr := c.reportDegraded(ctx, err)
 	if apierrors.IsNotFound(degradedErr) { // && management.IsOperatorRemovable() {

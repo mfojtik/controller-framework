@@ -17,7 +17,7 @@ import (
 
 	controllercontext "github.com/mfojtik/controller-framework/pkg/context"
 	"github.com/mfojtik/controller-framework/pkg/events/eventstesting"
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
 type threadSafeStringSet struct {
@@ -47,8 +47,8 @@ func (s *threadSafeStringSet) Insert(items ...string) *threadSafeStringSet {
 func TestSyncContext_eventHandler(t *testing.T) {
 	tests := []struct {
 		name         string
-		syncContext  types.Context
-		queueKeyFunc types.ObjectQueueKeysFunc
+		syncContext  framework.Context
+		queueKeyFunc framework.ObjectQueueKeysFunc
 		filterFunc   func(obj interface{}) bool
 		// event handler test
 
@@ -186,7 +186,7 @@ func TestSyncContext_eventHandler(t *testing.T) {
 			queueCtx, shutdown := context.WithCancel(context.Background())
 			c := &baseController{
 				syncContext: test.syncContext,
-				sync: func(ctx context.Context, controllerContext types.Context) error {
+				sync: func(ctx context.Context, controllerContext framework.Context) error {
 					itemsReceived.Insert(controllerContext.QueueKey())
 					return nil
 				},

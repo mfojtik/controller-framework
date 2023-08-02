@@ -16,7 +16,7 @@ import (
 	//operatorv1 "github.com/openshift/api/operator/v1"
 
 	"github.com/mfojtik/controller-framework/pkg/events/eventstesting"
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 )
 
 type fakeInformer struct {
@@ -102,7 +102,7 @@ func TestBaseController_Reconcile(t *testing.T) {
 		//syncDegradedClient: operatorClient,
 	}
 
-	c.sync = func(ctx context.Context, controllerContext types.Context) error {
+	c.sync = func(ctx context.Context, controllerContext framework.Context) error {
 		return nil
 	}
 	if err := c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t))); err != nil {
@@ -117,7 +117,7 @@ func TestBaseController_Reconcile(t *testing.T) {
 				t.Fatalf("expected TestControllerDegraded to be False, got %#v", status.Conditions)
 			}
 	*/
-	c.sync = func(ctx context.Context, controllerContext types.Context) error {
+	c.sync = func(ctx context.Context, controllerContext framework.Context) error {
 		return fmt.Errorf("error")
 	}
 	if err := c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t))); err == nil {
@@ -151,7 +151,7 @@ func TestBaseController_Run(t *testing.T) {
 	c := &baseController{
 		name:           "test",
 		informerSynced: []cache.InformerSynced{informer.HasSynced},
-		sync: func(ctx context.Context, syncCtx types.Context) error {
+		sync: func(ctx context.Context, syncCtx framework.Context) error {
 			defer func() { syncCount++ }()
 			defer t.Logf("Sync() call with %q", syncCtx.QueueKey())
 			if syncCtx.QueueKey() == "postStartHookKey" {
@@ -162,7 +162,7 @@ func TestBaseController_Run(t *testing.T) {
 		},
 		syncContext: context2.New("test", eventstesting.NewTestingEventRecorder(t)),
 		resyncEvery: 200 * time.Millisecond,
-		postStartHooks: []types.PostStartHook{func(ctx context.Context, syncContext types.Context) error {
+		postStartHooks: []framework.PostStartHook{func(ctx context.Context, syncContext framework.Context) error {
 			defer func() {
 				postStartHookDone = true
 			}()

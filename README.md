@@ -111,6 +111,8 @@ func main() {
 }
 ```
 
+Check the [Examples](https://github.com/mfojtik/controller-framework/tree/master/examples) for more controller examples.
+
 ## Contribution
 
 Contributions to the controller-framework are welcomed! Feel free to submit issues and pull requests via the [GitHub repository](https://github.com/mfojtik/controller-framework).

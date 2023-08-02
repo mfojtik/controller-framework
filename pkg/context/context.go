@@ -3,7 +3,7 @@ package context
 import (
 	"fmt"
 	"github.com/mfojtik/controller-framework/pkg/events"
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtime2 "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -20,10 +20,10 @@ type Context struct {
 	name          string
 }
 
-var _ types.Context = Context{}
+var _ framework.Context = Context{}
 
 // New gives new sync context.
-func New(name string, recorder events.Recorder) types.Context {
+func New(name string, recorder events.Recorder) framework.Context {
 	return Context{
 		queue: workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{
 			Name: name,
@@ -41,7 +41,7 @@ func (c Context) Queue() workqueue.RateLimitingInterface {
 	return c.queue
 }
 
-func (c Context) WithQueueKey(key string) types.Context {
+func (c Context) WithQueueKey(key string) framework.Context {
 	c.queueKey = key
 	return c
 }
@@ -55,7 +55,7 @@ func (c Context) Recorder() events.Recorder {
 }
 
 // EventHandler provides default event handler that is added to an informers passed to controller factory.
-func (c Context) EventHandler(queueKeysFunc types.ObjectQueueKeysFunc, filter types.EventFilterFunc) cache.ResourceEventHandler {
+func (c Context) EventHandler(queueKeysFunc framework.ObjectQueueKeysFunc, filter framework.EventFilterFunc) cache.ResourceEventHandler {
 	resourceEventHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			runtimeObj, ok := obj.(runtime.Object)

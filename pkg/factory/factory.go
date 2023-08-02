@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/mfojtik/controller-framework/pkg/context"
 	"github.com/mfojtik/controller-framework/pkg/controller"
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 	corev1 "k8s.io/api/core/v1"
 	"time"
 
@@ -20,7 +20,7 @@ import (
 
 // DefaultQueueKeysFunc returns a slice with a single element - the DefaultQueueKey
 func DefaultQueueKeysFunc(_ runtime.Object) []string {
-	return []string{types.DefaultQueueKey}
+	return []string{framework.DefaultQueueKey}
 }
 
 var defaultCacheSyncTimeout = 10 * time.Minute
@@ -28,8 +28,8 @@ var defaultCacheSyncTimeout = 10 * time.Minute
 // Factory is generator that generate standard Kubernetes controllers.
 // Factory is really generic and should be only used for simple controllers that does not require special stuff..
 type Factory struct {
-	sync        types.ControllerSyncFn
-	syncContext types.Context
+	sync        framework.ControllerSyncFn
+	syncContext framework.Context
 
 	//syncDegradedClient    operatorv1helpers.OperatorClient
 	resyncInterval  time.Duration
@@ -37,35 +37,28 @@ type Factory struct {
 
 	informers          []filteredInformers
 	informerQueueKeys  []informersWithQueueKey
-	bareInformers      []Informer
+	bareInformers      []framework.Informer
 	namespaceInformers []*namespaceInformer
 	cachesToSync       []cache.InformerSynced
 
-	postStartHooks        []types.PostStartHook
+	postStartHooks        []framework.PostStartHook
 	interestingNamespaces sets.Set[string]
 }
 
-// Informer represents any structure that allow to register event handlers and informs if caches are synced.
-// Any SharedInformer will comply.
-type Informer interface {
-	AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error)
-	HasSynced() bool
-}
-
 type namespaceInformer struct {
-	informer Informer
-	nsFilter types.EventFilterFunc
+	informer framework.Informer
+	nsFilter framework.EventFilterFunc
 }
 
 type informersWithQueueKey struct {
-	informers  []Informer
-	filter     types.EventFilterFunc
-	queueKeyFn types.ObjectQueueKeysFunc
+	informers  []framework.Informer
+	filter     framework.EventFilterFunc
+	queueKeyFn framework.ObjectQueueKeysFunc
 }
 
 type filteredInformers struct {
-	informers []Informer
-	filter    types.EventFilterFunc
+	informers []framework.Informer
+	filter    framework.EventFilterFunc
 }
 
 // ObjectQueueKeyFunc is used to make a string work queue key out of the runtime object that is passed to it.
@@ -81,7 +74,7 @@ func New() *Factory {
 
 // WithSync is used to set the controller synchronization function. This function is the core of the controller and is
 // usually hold the main controller logic.
-func (f *Factory) WithSync(syncFn types.ControllerSyncFn) *Factory {
+func (f *Factory) WithSync(syncFn framework.ControllerSyncFn) *Factory {
 	f.sync = syncFn
 	return f
 }
@@ -89,7 +82,7 @@ func (f *Factory) WithSync(syncFn types.ControllerSyncFn) *Factory {
 // WithInformers is used to register event handlers and get the caches synchronized functions.
 // Pass informers you want to use to react to changes on resources. If informer event is observed, then the Sync() function
 // is called.
-func (f *Factory) WithInformers(informers ...Informer) *Factory {
+func (f *Factory) WithInformers(informers ...framework.Informer) *Factory {
 	f.WithFilteredEventsInformers(nil, informers...)
 	return f
 }
@@ -98,7 +91,7 @@ func (f *Factory) WithInformers(informers ...Informer) *Factory {
 // Pass the informers you want to use to react to changes on resources. If informer event is observed, then the Sync() function
 // is called.
 // Pass filter to filter out events that should not trigger Sync() call.
-func (f *Factory) WithFilteredEventsInformers(filter types.EventFilterFunc, informers ...Informer) *Factory {
+func (f *Factory) WithFilteredEventsInformers(filter framework.EventFilterFunc, informers ...framework.Informer) *Factory {
 	f.informers = append(f.informers, filteredInformers{
 		informers: informers,
 		filter:    filter,
@@ -111,7 +104,7 @@ func (f *Factory) WithFilteredEventsInformers(filter types.EventFilterFunc, info
 // The controller will wait for the cache of this informer to be synced.
 // The existing event handlers will have to respect the queue key function or the sync() implementation will have to
 // count with custom queue keys.
-func (f *Factory) WithBareInformers(informers ...Informer) *Factory {
+func (f *Factory) WithBareInformers(informers ...framework.Informer) *Factory {
 	f.bareInformers = append(f.bareInformers, informers...)
 	return f
 }
@@ -120,7 +113,7 @@ func (f *Factory) WithBareInformers(informers ...Informer) *Factory {
 // Pass informers you want to use to react to changes on resources. If informer event is observed, then the Sync() function
 // is called.
 // Pass the queueKeyFn you want to use to transform the informer runtime.Object into string key used by work queue.
-func (f *Factory) WithInformersQueueKeyFunc(queueKeyFn ObjectQueueKeyFunc, informers ...Informer) *Factory {
+func (f *Factory) WithInformersQueueKeyFunc(queueKeyFn ObjectQueueKeyFunc, informers ...framework.Informer) *Factory {
 	f.informerQueueKeys = append(f.informerQueueKeys, informersWithQueueKey{
 		informers: informers,
 		queueKeyFn: func(o runtime.Object) []string {
@@ -135,7 +128,7 @@ func (f *Factory) WithInformersQueueKeyFunc(queueKeyFn ObjectQueueKeyFunc, infor
 // is called.
 // Pass the queueKeyFn you want to use to transform the informer runtime.Object into string key used by work queue.
 // Pass filter to filter out events that should not trigger Sync() call.
-func (f *Factory) WithFilteredEventsInformersQueueKeyFunc(queueKeyFn ObjectQueueKeyFunc, filter types.EventFilterFunc, informers ...Informer) *Factory {
+func (f *Factory) WithFilteredEventsInformersQueueKeyFunc(queueKeyFn ObjectQueueKeyFunc, filter framework.EventFilterFunc, informers ...framework.Informer) *Factory {
 	f.informerQueueKeys = append(f.informerQueueKeys, informersWithQueueKey{
 		informers: informers,
 		filter:    filter,
@@ -150,7 +143,7 @@ func (f *Factory) WithFilteredEventsInformersQueueKeyFunc(queueKeyFn ObjectQueue
 // Pass informers you want to use to react to changes on resources. If informer event is observed, then the Sync() function
 // is called.
 // Pass the queueKeyFn you want to use to transform the informer runtime.Object into string key used by work queue.
-func (f *Factory) WithInformersQueueKeysFunc(queueKeyFn types.ObjectQueueKeysFunc, informers ...Informer) *Factory {
+func (f *Factory) WithInformersQueueKeysFunc(queueKeyFn framework.ObjectQueueKeysFunc, informers ...framework.Informer) *Factory {
 	f.informerQueueKeys = append(f.informerQueueKeys, informersWithQueueKey{
 		informers:  informers,
 		queueKeyFn: queueKeyFn,
@@ -163,7 +156,7 @@ func (f *Factory) WithInformersQueueKeysFunc(queueKeyFn types.ObjectQueueKeysFun
 // is called.
 // Pass the queueKeyFn you want to use to transform the informer runtime.Object into string key used by work queue.
 // Pass filter to filter out events that should not trigger Sync() call.
-func (f *Factory) WithFilteredEventsInformersQueueKeysFunc(queueKeyFn types.ObjectQueueKeysFunc, filter types.EventFilterFunc, informers ...Informer) *Factory {
+func (f *Factory) WithFilteredEventsInformersQueueKeysFunc(queueKeyFn framework.ObjectQueueKeysFunc, filter framework.EventFilterFunc, informers ...framework.Informer) *Factory {
 	f.informerQueueKeys = append(f.informerQueueKeys, informersWithQueueKey{
 		informers:  informers,
 		filter:     filter,
@@ -173,7 +166,7 @@ func (f *Factory) WithFilteredEventsInformersQueueKeysFunc(queueKeyFn types.Obje
 }
 
 // WithPostStartHooks allows to register functions that will run asynchronously after the controller is started via Run command.
-func (f *Factory) WithPostStartHooks(hooks ...types.PostStartHook) *Factory {
+func (f *Factory) WithPostStartHooks(hooks ...framework.PostStartHook) *Factory {
 	f.postStartHooks = append(f.postStartHooks, hooks...)
 	return f
 }
@@ -181,7 +174,7 @@ func (f *Factory) WithPostStartHooks(hooks ...types.PostStartHook) *Factory {
 // WithNamespaceInformer is used to register event handlers and get the caches synchronized functions.
 // The sync function will only trigger when the object observed by this informer is a namespace and its name matches the interestingNamespaces.
 // Do not use this to register non-namespace informers.
-func (f *Factory) WithNamespaceInformer(informer Informer, interestingNamespaces ...string) *Factory {
+func (f *Factory) WithNamespaceInformer(informer framework.Informer, interestingNamespaces ...string) *Factory {
 	f.namespaceInformers = append(f.namespaceInformers, &namespaceInformer{
 		informer: informer,
 		nsFilter: namespaceChecker(interestingNamespaces),
@@ -242,7 +235,7 @@ func (f *Factory) ResyncSchedule(schedules ...string) *Factory {
 // WithSyncContext allows to specify custom, existing sync context for this factory.
 // This is useful during unit testing where you can override the default event recorder or mock the runtime objects.
 // If this function not called, a Context is created by the factory automatically.
-func (f *Factory) WithSyncContext(ctx types.Context) *Factory {
+func (f *Factory) WithSyncContext(ctx framework.Context) *Factory {
 	f.syncContext = ctx
 	return f
 }
@@ -257,12 +250,12 @@ func (f *Factory) WithSyncDegradedOnError(operatorClient operatorv1helpers.Opera
 */
 
 // Controller produce a runnable controller.
-func (f *Factory) ToController(name string, eventRecorder events.Recorder) types.Controller {
+func (f *Factory) ToController(name string, eventRecorder events.Recorder) framework.Controller {
 	if f.sync == nil {
 		panic(fmt.Errorf("WithSync() must be used before calling ToController() in %q", name))
 	}
 
-	var ctx types.Context
+	var ctx framework.Context
 	if f.syncContext != nil {
 		ctx = f.syncContext
 	} else {

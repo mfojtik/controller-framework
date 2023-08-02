@@ -3,7 +3,7 @@ package factory
 import (
 	"context"
 	"fmt"
-	"github.com/mfojtik/controller-framework/pkg/types"
+	"github.com/mfojtik/controller-framework/pkg/framework"
 	"sync"
 	"testing"
 	"time"
@@ -21,7 +21,7 @@ import (
 
 /*
 func TestFactory_ToController(t *testing.T) {
-	f := New().WithSync(func(ctx context.Context, controllerContext types.Context) error {
+	f := New().WithSync(func(ctx context.Context, controllerContext framework.Context) error {
 		return nil
 	})
 
@@ -103,7 +103,7 @@ func TestResyncController(t *testing.T) {
 
 	controllerSynced := make(chan struct{})
 	syncCallCount := 0
-	controller := factory.WithSync(func(ctx context.Context, controllerContext types.Context) error {
+	controller := factory.WithSync(func(ctx context.Context, controllerContext framework.Context) error {
 		syncCallCount++
 		if syncCallCount == 3 {
 			defer close(controllerSynced)
@@ -134,7 +134,7 @@ func TestMultiWorkerControllerShutdown(t *testing.T) {
 	allWorkersBusy := make(chan struct{})
 
 	// simulate a long running sync logic that is signalled to shutdown
-	controller := factory.WithSync(func(ctx context.Context, syncContext types.Context) error {
+	controller := factory.WithSync(func(ctx context.Context, syncContext framework.Context) error {
 		syncCallCountMutex.Lock()
 		syncCallCount++
 		switch syncCallCount {
@@ -185,7 +185,7 @@ func TestControllerWithInformer(t *testing.T) {
 	factory := New().WithInformers(kubeInformers.Core().V1().Secrets().Informer())
 
 	controllerSynced := make(chan struct{})
-	controller := factory.WithSync(func(ctx context.Context, syncContext types.Context) error {
+	controller := factory.WithSync(func(ctx context.Context, syncContext framework.Context) error {
 		defer close(controllerSynced)
 		if syncContext.Queue() == nil {
 			t.Errorf("expected queue to be initialized, it is not")
@@ -213,7 +213,7 @@ func TestControllerWithInformer(t *testing.T) {
 
 func TestControllerScheduled(t *testing.T) {
 	syncCalled := make(chan struct{})
-	controller := New().ResyncSchedule("@every 1s").WithSync(func(ctx context.Context, controllerContext types.Context) error {
+	controller := New().ResyncSchedule("@every 1s").WithSync(func(ctx context.Context, controllerContext framework.Context) error {
 		syncCalled <- struct{}{}
 		return nil
 	}).ToController("test", events.NewInMemoryRecorder("fake-controller"))
@@ -255,7 +255,7 @@ func TestControllerScheduled(t *testing.T) {
 
 func TestControllerSyncAfterStart(t *testing.T) {
 	syncCalled := make(chan struct{})
-	controller := New().ResyncEvery(10*time.Second).WithSync(func(ctx context.Context, controllerContext types.Context) error {
+	controller := New().ResyncEvery(10*time.Second).WithSync(func(ctx context.Context, controllerContext framework.Context) error {
 		close(syncCalled)
 		return nil
 	}).ToController("test", events.NewInMemoryRecorder("fake-controller"))
@@ -287,7 +287,7 @@ func TestControllerWithQueueFunction(t *testing.T) {
 	factory := New().WithInformersQueueKeyFunc(queueFn, kubeInformers.Core().V1().Secrets().Informer())
 
 	controllerSynced := make(chan struct{})
-	controller := factory.WithSync(func(ctx context.Context, syncContext types.Context) error {
+	controller := factory.WithSync(func(ctx context.Context, syncContext framework.Context) error {
 		defer close(controllerSynced)
 		if syncContext.Queue() == nil {
 			t.Errorf("expected queue to be initialized, it is not")
