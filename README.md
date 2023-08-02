@@ -21,10 +21,37 @@ The **controller-framework** is a versatile Golang module designed to facilitate
 
 ## Installation
 
-Integrate the controller framework into your Golang project by using Go modules:
+Start to integrate the controller framework into your Golang project by using `factory` Go modules:
 
 ```bash
 import "github.com/mfojtik/controller-framework/pkg/factory"
+```
+
+The factory provide a builder that produce all Kubernetes controller boilerplate. To learn how flexible it is, read the  [documentation](https://pkg.go.dev/github.com/mfojtik/controller-framework@master/pkg/factory)
+
+```go
+func New() framework.controller {
+    return factory.New().ToController("new-controller", eventRecorder)	
+}
+```
+
+You can access the workqueue inside the `sync()` function via the [controller context](https://pkg.go.dev/github.com/mfojtik/controller-framework@master/pkg/context).
+
+```go
+func (c *controller) sync(ctx context.Context, syncCtx factory.SyncContext) error {
+	syncCtx.Recorder().Eventf(...)
+	syncCtx.Queue().Add("key")
+}
+```
+
+And finally, for Kubernetes Event management, you can use included [Event Recorder](https://pkg.go.dev/github.com/mfojtik/controller-framework@master/pkg/events) which offers various
+backends for storing events (filesystem, [Kubernetes Events](https://pkg.go.dev/k8s.io/client-go@v0.27.4/kubernetes/typed/events/v1#NewForConfig), in-memory events, etc.)
+```go
+...
+
+recorder := NewRecorder(client.CoreV1().Events("test-namespace"), "test-operator", controllerRef)
+
+...
 ```
 
 ## Getting Started
