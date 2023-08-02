@@ -49,7 +49,7 @@ backends for storing events (filesystem, [Kubernetes Events](https://pkg.go.dev/
 ```go
 ...
 
-recorder := NewRecorder(client.CoreV1().Events("test-namespace"), "test-operator", controllerRef)
+recorder := events.NewRecorder(client.CoreV1().Events("test-namespace"), "test-operator", controllerRef)
 
 ...
 ```
