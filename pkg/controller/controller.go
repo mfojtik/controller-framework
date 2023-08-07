@@ -12,7 +12,6 @@ import (
 	//operatorv1 "github.com/openshift/api/operator/v1"
 
 	"github.com/robfig/cron"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -32,7 +31,6 @@ type baseController struct {
 	sync        func(ctx context.Context, controllerContext framework.Context) error
 	syncContext framework.Context
 
-	//syncDegradedClient operatorv1helpers.OperatorClient
 	resyncEvery     time.Duration
 	resyncSchedules []cron.Schedule
 
@@ -40,6 +38,9 @@ type baseController struct {
 
 	informerSynced        []cache.InformerSynced
 	informerSyncedTimeout time.Duration
+
+	syncPanicHandler framework.ControllerSyncPanicFn
+	syncErrorHandler framework.ControllerSyncErrorFn
 }
 
 func New(
@@ -94,7 +95,14 @@ func waitForNamedCacheSync(controllerName string, stopCh <-chan struct{}, cacheS
 
 func (c *baseController) Run(ctx context.Context, workers int) {
 	// HandleCrash recovers panics
-	defer utilruntime.HandleCrash(c.degradedPanicHandler)
+	defer utilruntime.HandleCrash(func(in interface{}) {
+		if c.syncPanicHandler == nil {
+			panic(in)
+		}
+		if err := c.syncPanicHandler(in); err != nil {
+			klog.Warningf("PANIC: Detected panic() in controller %q failed to run panic handler: %v\n\n%s", c.Name(), err, in)
+		}
+	})
 
 	// give caches 10 minutes to sync
 	cacheSyncCtx, cacheSyncCancel := context.WithTimeout(ctx, c.informerSyncedTimeout)
@@ -200,7 +208,14 @@ func (c *baseController) runWorker(queueCtx context.Context) {
 	wait.UntilWithContext(
 		queueCtx,
 		func(queueCtx context.Context) {
-			defer utilruntime.HandleCrash(c.degradedPanicHandler)
+			defer utilruntime.HandleCrash(func(in interface{}) {
+				if c.syncPanicHandler == nil {
+					panic(in)
+				}
+				if err := c.syncPanicHandler(in); err != nil {
+					klog.Warningf("PANIC: Detected panic() in controller %q failed to run panic handler: %v\n\n%s", c.Name(), err, in)
+				}
+			})
 			for {
 				select {
 				case <-queueCtx.Done():
@@ -213,60 +228,19 @@ func (c *baseController) runWorker(queueCtx context.Context) {
 		1*time.Second)
 }
 
-func (c *baseController) reportDegraded(ctx context.Context, err error) error {
-	return err
-}
-
 // reconcile wraps the sync() call and if operator client is set, it handle the degraded condition if sync() returns an error.
 func (c *baseController) reconcile(ctx context.Context, syncCtx framework.Context) error {
 	err := c.sync(ctx, syncCtx)
-	degradedErr := c.reportDegraded(ctx, err)
-	if apierrors.IsNotFound(degradedErr) { // && management.IsOperatorRemovable() {
-		// The operator tolerates missing CR, therefore don't report it up.
+	if errors.Is(err, SyntheticRequeueError) {
 		return err
 	}
-	return degradedErr
-}
-
-// degradedPanicHandler will go degraded on failures, then we should catch potential panics and covert them into bad status.
-func (c *baseController) degradedPanicHandler(panicVal interface{}) {
-	return
-	/*
-		if c.syncDegradedClient == nil {
-			// if we don't have a client for reporting degraded condition, then let the existing panic handler do the work
-			return
+	if c.syncErrorHandler != nil {
+		if handlerErr := c.syncErrorHandler(err); handlerErr != nil {
+			panic(handlerErr)
 		}
-		_ = c.reportDegraded(context.TODO(), fmt.Errorf("panic caught:\n%v", panicVal))
-	*/
-}
-
-// reportDegraded updates status with an indication of degraded-ness
-/*
-func (c *baseController) reportDegraded(ctx context.Context, reportedError error) error {
-	if c.syncDegradedClient == nil {
-		return reportedError
 	}
-	if reportedError != nil {
-		_, _, updateErr := v1helpers.UpdateStatus(ctx, c.syncDegradedClient, v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
-			Type:    c.name + "Degraded",
-			Status:  operatorv1.ConditionTrue,
-			Reason:  "SyncError",
-			Message: reportedError.Error(),
-		}))
-		if updateErr != nil {
-			klog.Warningf("Updating status of %q failed: %v", c.Name(), updateErr)
-		}
-		return reportedError
-	}
-	_, _, updateErr := v1helpers.UpdateStatus(ctx, c.syncDegradedClient,
-		v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
-			Type:   c.name + "Degraded",
-			Status: operatorv1.ConditionFalse,
-			Reason: "AsExpected",
-		}))
-	return updateErr
+	return err
 }
-*/
 
 func (c *baseController) processNextWorkItem(queueCtx context.Context) {
 	key, quit := c.syncContext.Queue().Get()
