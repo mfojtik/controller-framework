@@ -43,6 +43,9 @@ type Factory struct {
 
 	postStartHooks        []framework.PostStartHook
 	interestingNamespaces sets.Set[string]
+
+	controllerPanicHandler framework.ControllerSyncPanicFn
+	controllerErrorHandler framework.ControllerSyncErrorFn
 }
 
 type namespaceInformer struct {
@@ -237,6 +240,25 @@ func (f *Factory) ResyncSchedule(schedules ...string) *Factory {
 // If this function not called, a Context is created by the factory automatically.
 func (f *Factory) WithSyncContext(ctx framework.Context) *Factory {
 	f.syncContext = ctx
+	return f
+}
+
+// WithSyncErrorHandler allows in case the sync() function return error to additionally handle the error.
+// This allows to build error handling mechanisms that for example report operator status or provide error count metrics for controller.
+// NOTE: The original error is always returned from sync() call (so it is retried as usual).
+// NOTE2: If the error is SyntheticRequeueError this error is not being handled and the sync() is simply retried.
+// NOTE3: If an error is returned from the handler, this error causes panic()
+func (f *Factory) WithSyncErrorHandler(fn func(err error) error) *Factory {
+	f.controllerErrorHandler = fn
+	return f
+}
+
+// WithSyncPanicHandler allows to register a panic() handler for Run() method of controller. This handler will recover from
+// any panic inside the sync() and pass the panic into given function. This allows to update operator status OR it allows specific
+// controller metrics to be created.
+// If the panic handler is not specified, the util.HandleCrash() is called as usual.
+func (f *Factory) WithSyncPanicHandler(fn func(panicInterface interface{}) error) *Factory {
+	f.controllerPanicHandler = fn
 	return f
 }
 

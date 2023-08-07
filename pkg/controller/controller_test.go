@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	context2 "github.com/mfojtik/controller-framework/pkg/context"
 
@@ -90,16 +91,8 @@ func TestBaseController_ReturnOnGracefulShutdownWhileWaitingForCachesToSync(t *t
 }
 
 func TestBaseController_Reconcile(t *testing.T) {
-	/*
-		operatorClient := v1helpers.NewFakeOperatorClient(
-			&operatorv1.OperatorSpec{},
-			&operatorv1.OperatorStatus{},
-			nil,
-		)
-	*/
 	c := &baseController{
 		name: "TestController",
-		//syncDegradedClient: operatorClient,
 	}
 
 	c.sync = func(ctx context.Context, controllerContext framework.Context) error {
@@ -108,37 +101,52 @@ func TestBaseController_Reconcile(t *testing.T) {
 	if err := c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t))); err != nil {
 		t.Fatal(err)
 	}
-	/*
-		_, status, _, err := operatorClient.GetOperatorState()
-		if err != nil {
-			t.Fatal(err)
-		}
-			if !v1helpers.IsOperatorConditionPresentAndEqual(status.Conditions, "TestControllerDegraded", "False") {
-				t.Fatalf("expected TestControllerDegraded to be False, got %#v", status.Conditions)
-			}
-	*/
 	c.sync = func(ctx context.Context, controllerContext framework.Context) error {
 		return fmt.Errorf("error")
 	}
 	if err := c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t))); err == nil {
 		t.Fatal("expected error, got none")
 	}
-	/*
-		_, status, _, err = operatorClient.GetOperatorState()
-		if err != nil {
-			t.Fatal(err)
-		}
-				if !v1helpers.IsOperatorConditionPresentAndEqual(status.Conditions, "TestControllerDegraded", "True") {
-					t.Fatalf("expected TestControllerDegraded to be False, got %#v", status.Conditions)
-				}
-			condition := v1helpers.FindOperatorCondition(status.Conditions, "TestControllerDegraded")
-			if condition.Reason != "SyncError" {
-				t.Errorf("expected condition reason 'SyncError', got %q", condition.Reason)
+}
+
+func TestBaseController_ReconcileErrorAndPanicHandlers(t *testing.T) {
+	errsHandled := []error{}
+	c := &baseController{
+		name: "TestController",
+		syncErrorHandler: func(err error) error {
+			errsHandled = append(errsHandled, err)
+			return nil
+		},
+	}
+
+	syncErr := errors.New("sync error")
+
+	c.sync = func(ctx context.Context, controllerContext framework.Context) error {
+		return syncErr
+	}
+	if err := c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t))); !errors.Is(err, syncErr) {
+		t.Fatalf("expected sync() to return original error, got %v", err)
+	}
+	c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t)))
+	if len(errsHandled) != 2 {
+		t.Fatalf("expected 2 errors, got %d (%#v)", len(errsHandled), errsHandled)
+	}
+
+	c.syncErrorHandler = func(err error) error {
+		return err
+	}
+	panicCount := 0
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicCount++
 			}
-			if condition.Message != "error" {
-				t.Errorf("expected condition message 'error', got %q", condition.Message)
-			}
-	*/
+		}()
+		c.reconcile(context.TODO(), context2.New("TestController", eventstesting.NewTestingEventRecorder(t)))
+	}()
+	if panicCount == 0 {
+		t.Fatalf("expected to panic when sync error handler error out")
+	}
 }
 
 func TestBaseController_Run(t *testing.T) {

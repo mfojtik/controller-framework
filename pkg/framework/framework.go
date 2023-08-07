@@ -46,6 +46,9 @@ type Context interface {
 	Recorder() events.Recorder
 }
 
+type ControllerSyncPanicFn func(interface{}) error
+type ControllerSyncErrorFn func(error) error
+
 // ControllerSyncFn is a function that contain main controller logic.
 // The syncContext.syncContext passed is the main controller syncContext, when cancelled it means the controller is being shut down.
 // The syncContext provides access to controller name, queue and event recorder.
